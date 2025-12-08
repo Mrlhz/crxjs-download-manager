@@ -1,0 +1,133 @@
+import { getMissingIds } from '@/global/global.js';
+import { getNoteId } from '@/utils/index.js';
+import { DOWNLOAD_STOP, LIST_SELECTORS } from '@/global/globalConfig.js';
+import { downloadTabsBatch } from '@/global/downloadTabsBatch.js';
+
+export function getList(tab, options) {
+  return chrome.scripting.executeScript({ target: { tabId: tab.id }, function: getLinks, args: [tab, options] });
+}
+
+function getLinks(tab, options = {}) {
+  try {
+    // 获取作品列表链接
+    const userDetailElement = document.querySelector("#user_detail_element ul[data-e2e=\"scroll-list\"]");
+    const size = document.querySelector("#semiTabpost span[data-e2e=\"user-tab-count\"]")?.innerText || 0;
+    if (userDetailElement) {
+      const listItems = userDetailElement.querySelectorAll("li a");
+      const links = Array.from(listItems)
+        .map(item => {
+          return (item.href?.startsWith('http') ? item.href : location.origin + item.href);
+        })
+        .filter(href => href !== null);
+        console.log(links);
+      return { size, result: links };
+    }
+
+    console.log("User detail element not found.");
+    return { size, result: [] };
+  } catch (error) {
+    return { size: 0, result: [] }
+  }
+}
+
+// 循环获取所有作品列表链接，直到没有新链接为止，或达到最大循环次数
+export async function getLimitedListLinks(tab, options = {}, maxIterations = 10) {
+  let allLinks = [];
+  let newLinksFound = true;
+  let iteration = 0;
+
+  while (newLinksFound && iteration < maxIterations) {
+    const { size, result: links } = await getList(tab, options).then(([{ result }]) => result);
+    const uniqueLinks = Array.from(new Set(links));
+    const previousCount = allLinks.length;
+    allLinks = Array.from(new Set([...allLinks, ...uniqueLinks]));
+
+    console.log(`Iteration ${iteration + 1}: Found ${links?.length} links, Total unique links: ${allLinks.length}`, size);
+    if (isApproximatelyEqual(allLinks.length, previousCount) || isApproximatelyEqual(allLinks.length, parseInt(size))) {
+      console.log('Reached maximum links or no new links found.', size, allLinks.length);
+      newLinksFound = false; // 没有新链接，停止循环
+    } else {
+      // 滚动到底部
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        function: (selector) => {
+          document.querySelector(selector)?.scrollIntoView({ behavior: "instant", block: "end" })
+        },
+        args: [LIST_SELECTORS]
+      });
+
+      // 等待一段时间让页面加载新内容
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    iteration++;
+  }
+
+  return allLinks;
+}
+
+// 两个数相减绝对值小于2则认为相等
+function isApproximatelyEqual(a, b, threshold = 6) {
+  return Math.abs(a - b) < threshold;
+}
+
+// 循环所有作品列表链接，执行下载任务
+export async function processListLinks(tab, options = {}) {
+  const links = await getLimitedListLinks(tab, options);
+  console.log('Complete list of links:', links);
+
+  // 一次处理一个链接，避免打开过多标签页
+  const task = [...links];
+  const noteIds = links.map(link => getNoteId(link)).filter(id => id !== null);
+  console.log('Extracted noteIds:', noteIds);
+  // 待下载保存的noteIds
+  const missingIds = await getMissingIds(noteIds);
+  console.log('Existing noteIds:', missingIds);
+  console.log('Filtered task list:', task);
+  while (task.length > 0) {
+    const stop = await chrome.storage.local.get([DOWNLOAD_STOP]).then(res => res[DOWNLOAD_STOP]);
+    if (stop === '0') {
+      console.log('Download process stopped by user.');
+      break;
+    }
+    const link = task.shift();
+    // 过滤掉已存在的noteIds对应的链接
+    if (Array.isArray(missingIds) && missingIds.length === 0) {
+      console.log('All noteIds already exist, stopping further processing.');
+      break;
+    }
+    const noteId = getNoteId(link);
+    if (noteId && !missingIds.includes(noteId)) {
+      console.log('Skipping already existing noteId link:', link);
+      continue;
+    }
+    try {
+      console.log('Processing link:', link);
+      // 在这里添加对每个链接的处理逻辑，例如打开新标签页并下载内容
+      const newTab = await new Promise((resolve) => {
+        chrome.tabs.create({ url: link, active: true }, (tab) => {
+          // 等待标签页加载完成
+          chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
+            if (changeInfo.status === 'complete' && tabId === tab?.id) {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve(updatedTab);
+            }
+          });
+        });
+      });
+      if (task.length) {
+        // 等待一段时间
+        console.log('Waiting 5 seconds before processing next link');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+
+      console.log('New tab loaded:', newTab);
+      const res = await downloadTabsBatch([newTab], options);
+      console.log('downloadTabsBatch result:--------------------', res);
+      console.log('Finished processing link:', link, task.length, 'links remaining.');
+    } catch (error) {
+      console.log('Error processing link:', link, error);
+      continue;
+    }
+  }
+}
