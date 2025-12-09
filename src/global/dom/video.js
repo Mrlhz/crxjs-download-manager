@@ -1,9 +1,22 @@
-
+/**
+ * Injects a content script into the given tab to extract video metadata and download targets.
+ *
+ * @param {chrome.tabs.Tab} tab - Chrome tab object.
+ * @param {Object} [options] - Options forwarded to the page script.
+ * @returns {Promise<*>} Result of chrome.scripting.executeScript invocation.
+ */
 export function getVideo(tab, options) {
-  return chrome.scripting.executeScript({ target: { tabId: tab.id }, function: getSources, args: [tab, options] });
+  return chrome.scripting.executeScript({ target: { tabId: tab.id }, function: extractVideoData, args: [tab, options] });
 }
 
-function getSources(tab, options = {}) {
+/**
+ * Run in page context: extract video sources and metadata for the current Douyin page.
+ *
+ * @param {Object} tab - Tab object passed from extension context.
+ * @param {Object} [options={}] - Extraction options (e.g. type, noteId, name, title, all).
+ * @returns {Object} Extraction result or error object.
+ */
+function extractVideoData(tab, options = {}) {
   // 验证码
   if (!document.querySelector('#douyin-right-container')) {
     return { error: 'CAPTCHA_REQUIRED' };
@@ -88,29 +101,3 @@ function getSources(tab, options = {}) {
     }
   }
 }
-
-
-console.log('video.js loaded');
-
-(function () {
-	'use strict';
-  console.log('video.js executing...');
-  if (typeof browser !== 'undefined') {
-    console.log('browser is defined');
-  } else {
-    console.log('browser is not defined');
-  }
-  if (typeof globalThis !== 'undefined' && typeof globalThis.browser === 'undefined') {
-    Object.defineProperty(globalThis, 'browser', {
-      get() {
-        return {
-          getVideo,
-          getSources
-        };
-      },
-      configurable: true,
-      enumerable: true
-    });
-    console.log('browser has been defined on globalThis');
-  }
-})();

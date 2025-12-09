@@ -18,22 +18,38 @@ import { tryCloseTab } from '@/global/tryCloseTab.js';
 // 下载文件，可通过入参控制同时下载文件数量
 // 开始下载文件，通过download函数进行下载
 // 返回下载结果
+/**
+ * Download resources from a given browser tab.
+ *
+ * - Determines resource type (video or note) from tab URL.
+ * - Retrieves resource metadata from the page.
+ * - Filters out files that already exist via pathExists.
+ * - Attempts downloads with simple retry logic for known failure cases.
+ * - Optionally saves resource metadata and closes the tab.
+ *
+ * @param {chrome.tabs.Tab} tab - Chrome tab object containing the page to inspect.
+ * @param {Object} [options] - Options controlling behavior.
+ * @param {boolean} [options.all=false] - Close the tab after processing when true.
+ * @param {boolean} [options.save=false] - Persist resource metadata when true.
+ * @returns {Promise<{ success: boolean, message: string, results?: Array }>} Result summary.
+ */
 export async function downloadTabResources(tab = {}, options = {}) {
   const { all = false, save = false } = options;
-  console.log('Starting download for tab:', tab.id, 'with options:', options);
+  const log = (...args) => console.log('[downloadTabResources]: ', ...args);
+  log('Starting download for tab:', tab.id, 'with options:', options);
   let resourceInfo;
   try {
     resourceInfo = await getTabResourceInfo(tab, {});
   } catch (error) {
-    console.log('Error getting resource info for tab:', tab.id, error);
+    log('Error getting resource info for tab:', tab.id, error);
     return { success: false, message: 'Failed to get resource info' };
   }
   const { files = [] } = resourceInfo;
-  console.log('Resource info for tab:', tab.id, resourceInfo);
+  log('Resource info for tab:', tab.id, resourceInfo);
   // 通过pathExists过滤已存在的文件
   const filesToDownload = await pathExists(files);
   if (filesToDownload.length === 0) {
-    console.log('All files already exist for tab:', tab.id);
+    log('All files already exist for tab:', tab.id);
     // 尝试关闭当前tab
     if (all) {
       await tryCloseTab(tab);
@@ -41,40 +57,39 @@ export async function downloadTabResources(tab = {}, options = {}) {
     return { success: false, message: 'All files already exist' };
   }
 
-  // 记录tab对应的下载文件数量
-  // if (tabDownloadMap.has(tab.id)) {
-  //   const currentCount = tabDownloadMap.get(tab.id);
-  //   tabDownloadMap.set(tab.id, currentCount + filesToDownload.length);
-  // } else {
-  //   tabDownloadMap.set(tab.id, filesToDownload.length);
-  // }
   try {
     const results = [];
     for (const file of filesToDownload) {
       const response = await downloadWithRetry(file);
       if (response.error) {
-        console.log(response);
+        log(response);
         continue
       }
       results.push(response);
     }
     if (save && resourceInfo?.[NOTE_ID_KEY]) {
       const r = await saveOne({ ...resourceInfo, url: tab.url, download: true });
-      console.log('Resource info saved for tab:', tab.id, resourceInfo, r);
+      log('Resource info saved for tab:', tab.id, resourceInfo, r);
     }
     // 尝试关闭当前tab
     if (all) {
       await tryCloseTab(tab);
     }
-    console.log('Download initiated for tab:', tab.id, results);
+    log('Download initiated for tab:', tab.id, results);
     return { success: true, message: 'Download started', results };
   } catch (error) {
-    console.log('Download failed for tab:', tab.id, 'Error:', error);
+    log('Download failed for tab:', tab.id, 'Error:', error);
     return { success: false, message: 'Download failed' };
   }
 }
 
-// 根据url pathname决定下载视频或笔记
+/**
+ * Inspect tab URL and inject the appropriate content script to extract resource metadata.
+ * 根据url pathname决定下载视频或笔记
+ * 
+ * @param {chrome.tabs.Tab} tab
+ * @returns {Promise<Object>} Resource metadata object containing at least `files` array.
+ */
 async function getTabResourceInfo(tab, options = {}) {
   const { pathname } = new URL(tab?.url);
   // 根据不同的pathname注入不同的脚本获取资源信息
@@ -82,7 +97,7 @@ async function getTabResourceInfo(tab, options = {}) {
     // 获取tab页面的资源信息
     const result = await getVideo(tab, options).then(([{ documentId, frameId, result }]) => result);
     if (!result || !result.files) {
-      console.log('No video resources found in tab:', tab.id);
+      console.log('[getTabResourceInfo]: No video resources found in tab:', tab);
       return { error: 'Failed to get video resources' };
     }
     return result;
@@ -90,7 +105,7 @@ async function getTabResourceInfo(tab, options = {}) {
   if (pathname.startsWith('/note')) {
     const result = await getNote(tab, options).then(([{ documentId, frameId, result }]) => result);
     if (!result || !result.files) {
-      console.log('No note resources found in tab:', tab.id);
+      console.log('[getTabResourceInfo]: No note resources found in tab:', tab.id);
       return { error: 'Failed to get note resources' };
     }
     return result;
@@ -98,7 +113,13 @@ async function getTabResourceInfo(tab, options = {}) {
   return {};
 }
 
-// 下载失败后调整参数重新下载一次
+/**
+ * Dispatch download to type-specific retry handlers.
+ * 下载失败后调整参数重新下载一次
+ * 
+ * @param {Object} file - Resource file descriptor (must include `type`).
+ * @returns {Promise<Object>} download result or { error } object.
+ */
 async function downloadWithRetry(file = {}) {
   if (file.type === 'note') {
     return downloadNoteWithRetry(file);
@@ -106,6 +127,13 @@ async function downloadWithRetry(file = {}) {
     return downloadVideoWithRetry(file);
   }
 }
+
+/**
+ * Attempt to download a note file, retrying with a safe filename structure if needed.
+ *
+ * @param {Object} file
+ * @returns {Promise<Object>}
+ */
 async function downloadNoteWithRetry(file = {}) {
   try {
     const response = await download(file);
@@ -126,6 +154,12 @@ async function downloadNoteWithRetry(file = {}) {
   }
 }
 
+/**
+ * Attempt to download a video file, retrying with the first available source if interrupted.
+ *
+ * @param {Object} file
+ * @returns {Promise<Object>}
+ */
 async function downloadVideoWithRetry(file = {}) {
   try {
     const response = await download(file);
