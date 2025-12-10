@@ -46,7 +46,7 @@ export function notice(options = {}) {
     type: 'basic',
     title: '通知',
     // message: 'pathExists服务未启用',
-    iconUrl: '../images/douyin.png',
+    iconUrl: './douyin.png',
     ...( options || {})
   });
 }

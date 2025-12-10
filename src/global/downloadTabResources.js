@@ -37,10 +37,8 @@ export async function downloadTabResources(tab = {}, options = {}) {
   const { all = false, save = false } = options;
   const log = (...args) => console.log('[downloadTabResources]: ', ...args);
   log('Starting download for tab:', tab.id, 'with options:', options);
-  let resourceInfo;
-  try {
-    resourceInfo = await getTabResourceInfo(tab, {});
-  } catch (error) {
+  const resourceInfo = await getTabResourceInfo(tab, {});
+  if (resourceInfo.error) {
     log('Error getting resource info for tab:', tab.id, error);
     return { success: false, message: 'Failed to get resource info' };
   }
@@ -50,7 +48,7 @@ export async function downloadTabResources(tab = {}, options = {}) {
   const filesToDownload = await pathExists(files);
   if (filesToDownload.length === 0) {
     log('All files already exist for tab:', tab.id);
-    // 尝试关闭当前tab
+    await saveResource(tab, options, resourceInfo);
     if (all) {
       await tryCloseTab(tab);
     }
@@ -67,11 +65,7 @@ export async function downloadTabResources(tab = {}, options = {}) {
       }
       results.push(response);
     }
-    if (save && resourceInfo?.[NOTE_ID_KEY]) {
-      const r = await saveOne({ ...resourceInfo, url: tab.url, download: true });
-      log('Resource info saved for tab:', tab.id, resourceInfo, r);
-    }
-    // 尝试关闭当前tab
+    await saveResource(tab, options, resourceInfo);
     if (all) {
       await tryCloseTab(tab);
     }
@@ -91,24 +85,28 @@ export async function downloadTabResources(tab = {}, options = {}) {
  * @returns {Promise<Object>} Resource metadata object containing at least `files` array.
  */
 async function getTabResourceInfo(tab, options = {}) {
-  const { pathname } = new URL(tab?.url);
-  // 根据不同的pathname注入不同的脚本获取资源信息
-  if (pathname.startsWith('/video')) {
-    // 获取tab页面的资源信息
-    const result = await getVideo(tab, options).then(([{ documentId, frameId, result }]) => result);
-    if (!result || !result.files) {
-      console.log('[getTabResourceInfo]: No video resources found in tab:', tab);
-      return { error: 'Failed to get video resources' };
+  try {
+    const { pathname } = new URL(tab?.url);
+    // 根据不同的pathname注入不同的脚本获取资源信息
+    if (pathname.startsWith('/video')) {
+      // 获取tab页面的资源信息
+      const result = await getVideo(tab, options).then(([{ documentId, frameId, result }]) => result);
+      if (!result || !result.files) {
+        console.log('[getTabResourceInfo]: No video resources found in tab:', tab);
+        return { error: 'Failed to get video resources' };
+      }
+      return result;
     }
-    return result;
-  }
-  if (pathname.startsWith('/note')) {
-    const result = await getNote(tab, options).then(([{ documentId, frameId, result }]) => result);
-    if (!result || !result.files) {
-      console.log('[getTabResourceInfo]: No note resources found in tab:', tab.id);
-      return { error: 'Failed to get note resources' };
+    if (pathname.startsWith('/note')) {
+      const result = await getNote(tab, options).then(([{ documentId, frameId, result }]) => result);
+      if (!result || !result.files) {
+        console.log('[getTabResourceInfo]: No note resources found in tab:', tab.id);
+        return { error: 'Failed to get note resources' };
+      }
+      return result;
     }
-    return result;
+  } catch (error) {
+    return { error }
   }
   return {};
 }
@@ -174,6 +172,18 @@ async function downloadVideoWithRetry(file = {}) {
       }
     }
 
+    return { error }
+  }
+}
+
+async function saveResource(tab = {}, options = {}, resource = {}) {
+  const { save = false } = options;
+  try {
+    if (save && resource?.[NOTE_ID_KEY]) {
+      const r = await saveOne({ ...resource, url: tab.url, download: true });
+      console.log('[saveResource]: Resource info saved for tab:', tab.id, resource, r);
+    }
+  } catch (error) {
     return { error }
   }
 }

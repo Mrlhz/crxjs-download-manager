@@ -4,8 +4,10 @@ import { processListLinks } from './getList.js';
 import { downloadTabResources } from '@/global/downloadTabResources.js';
 import { downloadMatchTabsBatch } from '@/global/downloadMatchTabsBatch.js';
 
-chrome.commands.onCommand.addListener(async (command) => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+chrome.commands.onCommand.addListener(listener);
+
+async function listener(command, tab) {
+  // const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   const { pathname, query } = await Promise.try(() => {
     const { pathname } = new URL(tab?.url);
@@ -30,4 +32,4 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'RUN_ALT_T') {
 
   }
-})
+}

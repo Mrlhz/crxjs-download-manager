@@ -1,4 +1,4 @@
-import { download, downloadWithConcurrency } from  './download.js';
+import { download, downloadWithConcurrency } from '@/global/download.js';
 
 export async function saveOne(notes = {}) {
   const result = await fetch(`http://localhost:3000/douyin/saveOne`, {

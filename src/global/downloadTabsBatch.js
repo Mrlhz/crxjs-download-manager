@@ -1,5 +1,5 @@
-import { downloadTabResources } from './downloadTabResources.js';
-import { tryCloseTab } from './tryCloseTab.js';
+import { downloadTabResources } from '@/global/downloadTabResources.js';
+import { tryCloseTab } from '@/global/tryCloseTab.js';
 
 /**
  * 批量下载多个 tab（并发控制）。
