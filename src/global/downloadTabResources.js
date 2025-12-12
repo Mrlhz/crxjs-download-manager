@@ -3,7 +3,7 @@ import { pathExists } from '@/global/pathExists.js';
 import { getNote } from '@/global/dom/note.js';
 import { getVideo } from '@/global/dom/video.js';
 import { saveOne } from '@/global/global.js';
-import { NOTE_ID_KEY } from '@/global/globalConfig.js';
+import { NOTE_ID_KEY, DOWNLOAD_STOP } from '@/global/globalConfig.js';
 import { download } from '@/global/download.js';
 import { tryCloseTab } from '@/global/tryCloseTab.js';
 
@@ -37,25 +37,24 @@ export async function downloadTabResources(tab = {}, options = {}) {
   const { all = false, save = false } = options;
   const log = (...args) => console.log('[downloadTabResources]: ', ...args);
   log('Starting download for tab:', tab.id, 'with options:', options);
-  const resourceInfo = await getTabResourceInfo(tab, {});
-  if (resourceInfo.error) {
-    log('Error getting resource info for tab:', tab.id, error);
-    return { success: false, message: 'Failed to get resource info' };
-  }
-  const { files = [] } = resourceInfo;
-  log('Resource info for tab:', tab.id, resourceInfo);
-  // 通过pathExists过滤已存在的文件
-  const filesToDownload = await pathExists(files);
-  if (filesToDownload.length === 0) {
-    log('All files already exist for tab:', tab.id);
-    await saveResource(tab, options, resourceInfo);
-    if (all) {
-      await tryCloseTab(tab);
-    }
-    return { success: false, message: 'All files already exist' };
-  }
-
   try {
+    const resourceInfo = await getTabResourceInfo(tab, {});
+    if (resourceInfo.error) {
+      log('Error getting resource info for tab:', tab.id, resourceInfo.error);
+      return { success: false, message: 'Failed to get resource info' };
+    }
+    const { files = [] } = resourceInfo;
+    log('Resource info for tab:', tab.id, resourceInfo);
+    // 通过pathExists过滤已存在的文件
+    const filesToDownload = await pathExists(files);
+    if (filesToDownload.length === 0) {
+      log('All files already exist for tab:', tab.id);
+      await saveResource(tab, options, resourceInfo);
+      if (all) {
+        await tryCloseTab(tab);
+      }
+      return { success: false, message: 'All files already exist' };
+    }
     const results = [];
     for (const file of filesToDownload) {
       const response = await downloadWithRetry(file);
@@ -88,27 +87,25 @@ async function getTabResourceInfo(tab, options = {}) {
   try {
     const { pathname } = new URL(tab?.url);
     // 根据不同的pathname注入不同的脚本获取资源信息
-    if (pathname.startsWith('/video')) {
-      // 获取tab页面的资源信息
-      const result = await getVideo(tab, options).then(([{ documentId, frameId, result }]) => result);
-      if (!result || !result.files) {
-        console.log('[getTabResourceInfo]: No video resources found in tab:', tab);
-        return { error: 'Failed to get video resources' };
-      }
-      return result;
+    const enums = {
+      video: getVideo,
+      note: getNote
+    };
+    const type = pathname.split('/')?.[1];
+    const getSources = enums[type];
+    // 获取tab页面的资源信息
+    const result = await getSources(tab, options).then(([{ documentId, frameId, result }]) => result);
+    if (result?.error === 'CAPTCHA_REQUIRED') {
+      await chrome.storage.local.set({ [DOWNLOAD_STOP]: '0'});
     }
-    if (pathname.startsWith('/note')) {
-      const result = await getNote(tab, options).then(([{ documentId, frameId, result }]) => result);
-      if (!result || !result.files) {
-        console.log('[getTabResourceInfo]: No note resources found in tab:', tab.id);
-        return { error: 'Failed to get note resources' };
-      }
-      return result;
+    if (!result?.files?.some(f => f)) {
+      console.log(`[getTabResourceInfo]: No ${type} resources found in tab:`, tab, result);
+      return { error: `Failed to get ${type} resources` };
     }
+    return result;
   } catch (error) {
     return { error }
   }
-  return {};
 }
 
 /**

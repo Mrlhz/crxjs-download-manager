@@ -1,6 +1,6 @@
 import { getMissingIds } from '@/global/global.js';
 import { getNoteId } from '@/utils/index.js';
-import { DOWNLOAD_STOP, LIST_SELECTORS } from '@/global/globalConfig.js';
+import { DOWNLOAD_STOP, TOBE_DOWNLOADED_LIST, LIST_SELECTORS } from '@/global/globalConfig.js';
 import { downloadTabsBatch } from '@/global/downloadTabsBatch.js';
 
 export function getList(tab, options) {
@@ -82,6 +82,10 @@ export async function processListLinks(tab, options = {}) {
   console.log('Extracted noteIds:', noteIds);
   // 待下载保存的noteIds
   const missingIds = await getMissingIds(noteIds);
+  if (Array.isArray(missingIds)) {
+    const list = await getToBeDownloadedList(TOBE_DOWNLOADED_LIST);
+    missingIds.push(...list);
+  }
   console.log('Existing noteIds:', missingIds);
   console.log('Filtered task list:', task);
   while (task.length > 0) {
@@ -130,4 +134,14 @@ export async function processListLinks(tab, options = {}) {
       continue;
     }
   }
+}
+
+async function getToBeDownloadedList(key = TOBE_DOWNLOADED_LIST) {
+  const result = await chrome.storage.local.get([key]).then(res => res[key]);
+
+  if (Array.isArray(result)) {
+    return result.filter(v => v);
+  }
+
+  return [];
 }

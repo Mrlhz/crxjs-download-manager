@@ -25,6 +25,7 @@ export const MESSAGE_TYPE = {
 export const NOTE_ID_KEY = 'noteId';
 
 export const DOWNLOAD_STOP = 'DOWNLOAD_STOP';
+export const TOBE_DOWNLOADED_LIST = 'TOBE_DOWNLOADED_LIST';
 export const LIST_SELECTORS = '#user_detail_element ul[data-e2e=\"scroll-list\"]';
 
 export const PAGE_HOST = '';
