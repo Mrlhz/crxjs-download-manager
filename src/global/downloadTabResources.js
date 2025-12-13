@@ -6,6 +6,7 @@ import { saveOne } from '@/global/global.js';
 import { NOTE_ID_KEY, DOWNLOAD_STOP } from '@/global/globalConfig.js';
 import { download } from '@/global/download.js';
 import { tryCloseTab } from '@/global/tryCloseTab.js';
+import chalk from '@/utils/chalk/chalk-ansi.js';
 
 // 传入一个tab页签对象下载文件
 // 1. tab: chrome.tabs.Tab 对象
@@ -35,7 +36,7 @@ import { tryCloseTab } from '@/global/tryCloseTab.js';
  */
 export async function downloadTabResources(tab = {}, options = {}) {
   const { all = false, save = false } = options;
-  const log = (...args) => console.log('[downloadTabResources]: ', ...args);
+  const log = (...args) => console.log(chalk.blue('[downloadTabResources]: '), ...args);
   log('Starting download for tab:', tab.id, 'with options:', options);
   try {
     const resourceInfo = await getTabResourceInfo(tab, {});
@@ -99,7 +100,7 @@ async function getTabResourceInfo(tab, options = {}) {
       await chrome.storage.local.set({ [DOWNLOAD_STOP]: '0'});
     }
     if (!result?.files?.some(f => f)) {
-      console.log(`[getTabResourceInfo]: No ${type} resources found in tab:`, tab, result);
+      console.log(`${chalk.blue('[getTabResourceInfo]')}: No ${type} resources found in tab:`, tab, result);
       return { error: `Failed to get ${type} resources` };
     }
     return result;
@@ -162,7 +163,7 @@ async function downloadVideoWithRetry(file = {}) {
   } catch (error) {
     if (error?.message === 'Download interrupted') {
       const { __source: videos } = file;
-      console.log('-------------------', videos)
+      console.log(`${chalk.blue('[downloadVideoWithRetry]')}, ${chalk.red(error?.message)}`, videos)
       if (Array.isArray(videos) && videos.length > 1 && videos[0]) {
         const response = await download(videos[0]);
         return response;
