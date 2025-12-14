@@ -1,6 +1,13 @@
 import { getMissingIds } from '@/global/global.js';
 import { getNoteId } from '@/utils/index.js';
-import { DOWNLOAD_STOP, TOBE_DOWNLOADED_LIST, LIST_SELECTORS } from '@/global/globalConfig.js';
+import {
+  DOWNLOAD_STOP,
+  DOWNLOAD_REVERSE,
+  TOBE_DOWNLOADED_LIST,
+  LIST_SELECTORS,
+  WAIT_TIME_BEFORE_NEXT_LINK,
+  DELAY_LEVEL_5_MS
+} from '@/global/globalConfig.js';
 import { downloadTabsBatch } from '@/global/downloadTabsBatch.js';
 
 export function getList(tab, options) {
@@ -74,10 +81,11 @@ function isApproximatelyEqual(a, b, threshold = 6) {
 // 循环所有作品列表链接，执行下载任务
 export async function processListLinks(tab, options = {}) {
   const links = await getLimitedListLinks(tab, options);
+  const reverse = await chrome.storage.local.get([DOWNLOAD_REVERSE]).then(res => res[DOWNLOAD_REVERSE]);
   console.log('Complete list of links:', links);
 
   // 一次处理一个链接，避免打开过多标签页
-  const task = [...links];
+  const task = reverse === '1' ? [...links].reverse() : [...links];
   const noteIds = links.map(link => getNoteId(link)).filter(id => id !== null);
   console.log('Extracted noteIds:', noteIds);
   // 待下载保存的noteIds
@@ -121,8 +129,9 @@ export async function processListLinks(tab, options = {}) {
       });
       if (task.length) {
         // 等待一段时间
-        console.log('Waiting 5 seconds before processing next link');
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        const delay = await chrome.storage.local.get([WAIT_TIME_BEFORE_NEXT_LINK]).then(res => res[WAIT_TIME_BEFORE_NEXT_LINK]);
+        console.log(`Waiting ${(delay || DELAY_LEVEL_5_MS)/1000} seconds before processing next link`);
+        await new Promise(resolve => setTimeout(resolve, delay || DELAY_LEVEL_5_MS));
       }
 
       console.log('New tab loaded:', newTab);
@@ -137,6 +146,7 @@ export async function processListLinks(tab, options = {}) {
 }
 
 async function getToBeDownloadedList(key = TOBE_DOWNLOADED_LIST) {
+  // await chrome.storage.local.set({ TOBE_DOWNLOADED_LIST: [] });
   const result = await chrome.storage.local.get([key]).then(res => res[key]);
 
   if (Array.isArray(result)) {

@@ -57,15 +57,19 @@ export async function downloadTabResources(tab = {}, options = {}) {
       return { success: false, message: 'All files already exist' };
     }
     const results = [];
+    const errors = [];
     for (const file of filesToDownload) {
       const response = await downloadWithRetry(file);
       if (response.error) {
         log(response);
+        errors.push(response);
         continue
       }
       results.push(response);
     }
-    await saveResource(tab, options, resourceInfo);
+    if (errors.length === 0) {
+      await saveResource(tab, options, resourceInfo);
+    }
     if (all) {
       await tryCloseTab(tab);
     }
@@ -168,6 +172,16 @@ async function downloadVideoWithRetry(file = {}) {
         const response = await download(videos[0]);
         return response;
       }
+    }
+    if (error.message === 'Invalid filename') {
+      const { name, fileName } = file;
+      const obj = { ...file, filename: `${safeFileName(name)}/${safeFileNameWithExtension(fileName)}` };
+      const [filterFile] = await pathExists([obj]);
+      if (filterFile) {
+        const response = await download(obj);
+        return response;
+      }
+      return { error: `${error.message}: ${file.filename}` }
     }
 
     return { error }

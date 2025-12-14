@@ -32,7 +32,7 @@ export function getNote(tab, options) {
 function pageExtractNote(tab, options = {}) {
   // 当页面被验证码或其它原因阻断时，提前返回
   function isBlockedByCaptcha() {
-    return !document.querySelector('#douyin-right-container');
+    return document.querySelector('#captcha_container') || !document.querySelector('#douyin-right-container');
   }
 
   if (isBlockedByCaptcha()) {

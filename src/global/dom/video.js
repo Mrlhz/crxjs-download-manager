@@ -18,7 +18,7 @@ export function getVideo(tab, options) {
  */
 function extractVideoData(tab, options = {}) {
   // 验证码
-  if (!document.querySelector('#douyin-right-container')) {
+  if (document.querySelector('#captcha_container') || !document.querySelector('#douyin-right-container')) {
     return { error: 'CAPTCHA_REQUIRED' };
   }
   const { type, noteId } = options || {};
@@ -68,13 +68,13 @@ function extractVideoData(tab, options = {}) {
       .map((url, index) => {
         const extensionMatch = url.match(/\.(mp4|webm|ogg)(\?|$)/i);
         const extension = extensionMatch ? extensionMatch[1] : 'mp4';
-        const filename = title === noteId ? `${filenamePrefix}/${noteId}.${extension}` : `${filenamePrefix}/${title}_${noteId}.${extension}`;
+        const fileName = title === noteId ? `${noteId}.${extension}` : `${title}_${noteId}.${extension}`;
         return {
           type: 'video',
           name,
           url,
-          filename,
-          fileName: `${title}_${noteId}.${extension}`,
+          filename: `${filenamePrefix}/${fileName}`,
+          fileName,
           tabId: tab.id,
           noteId,
           title,
@@ -87,6 +87,8 @@ function extractVideoData(tab, options = {}) {
     sources.forEach(item => {
       item.__source = [...sources].map(V => V);
     });
+
+    console.log({ sources });
 
     return {
       name,
