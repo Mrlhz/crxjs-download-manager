@@ -60,10 +60,8 @@ function createChalk(styles = []) {
   }
   const handler = {
     get(target, prop) {
-      console.log({ target, prop })
       let key = String(prop);
       if (ansiColors.hasOwnProperty(key)) {
-        console.log({ styles }, key)
         return createChalk([...styles, key])
       }
       return target[prop];
