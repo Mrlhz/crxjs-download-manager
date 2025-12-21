@@ -173,35 +173,37 @@ class DownloadManager {
    */
   _setupDownloadListener(downloadId, options, resolve, reject) {
     const listener = (delta) => {
-      if (delta.id !== downloadId) {
-        console.log('下载ID不匹配，跳过:', delta.id, downloadId);
-        return;
-      }
+      console.log(delta);
+      if (delta.id === downloadId) {
+      // if (delta.id !== downloadId) {
+      //   console.log('下载ID不匹配，跳过:', delta.id, downloadId);
+      //   return;
+      // }
       
       this._updateDownloadMetadata(downloadId, delta, options);
       
-      if (delta.state && delta.state.current === DownloadState.COMPLETE) {
-        this._cleanupListener(downloadId);
+      if (delta?.state?.current === DownloadState.COMPLETE) {
         const metadata = this._downloadMap.get(downloadId);
-        if (metadata) {
-          resolve({
-            downloadId,
-            delta: metadata,
-            options
-          });
-        }
-      } else if (delta.state && delta.state.current === DownloadState.INTERRUPTED) {
+        console.log({ metadata })
+        this._cleanupListener(downloadId);
+        resolve({
+          downloadId,
+          delta: metadata,
+          options
+        });
+      } else if (delta?.state?.current === DownloadState.INTERRUPTED) {
         this._cleanupListener(downloadId);
         reject(new DownloadError(
           '下载被中断',
           DownloadErrorType.DOWNLOAD_INTERRUPTED
         ));
-      } else if (delta.error && delta.error.current) {
+      } else if (delta?.error || delta?.error?.current) {
         this._cleanupListener(downloadId);
         reject(new DownloadError(
-          `下载失败: ${delta.error.current}`,
+          `下载失败: ${delta?.error?.current || delta?.error}`,
           DownloadErrorType.DOWNLOAD_ERROR
         ));
+      }
       }
     };
     
@@ -363,15 +365,19 @@ class DownloadService {
    * @returns {Promise<void>}
    */
   async _saveMetadata(result) {
+    if (!result?.delta) {
+      this._handleError(new SaveFileError('无元数据', error), { operation: 'saveMetadata', result });
+      return;
+    }
     try {
-      await this._apiService.saveFile(result.delta);
+      await this._apiService.saveFile(result?.delta);
     } catch (error) {
       console.warn('保存元数据失败:', error);
       
       if (error instanceof SaveFileError) {
-        this._handleError(error, { 
-          operation: 'saveMetadata', 
-          result 
+        this._handleError(error, {
+          operation: 'saveMetadata',
+          result
         });
       }
     }
