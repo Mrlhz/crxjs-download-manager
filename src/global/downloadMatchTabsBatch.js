@@ -5,7 +5,7 @@ import {
 import { downloadTabResources } from '@/global/downloadTabResources.js';
 import { PAGE_HOST } from '@/global/globalConfig.js';
 
-export async function downloadMatchTabsBatch() {
+export async function downloadMatchTabsBatch(options = {}) {
   const contentTabs = await listDouyinContentTabs();
 
   for (const tab of contentTabs) {
@@ -24,7 +24,7 @@ export async function downloadMatchTabsBatch() {
   }
 
   for (const tab of contentTabs) {
-    const result = await downloadTabResources(tab, { all: true, save: true });
+    const result = await downloadTabResources(tab, options);
     console.log(`${tab.title}: `, result)
   }
 }

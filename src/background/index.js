@@ -1,5 +1,5 @@
 import { parseQuery } from '@/utils/index.js';
-import { DOWNLOAD_STOP } from '@/global/globalconfig.js';
+import { DOWNLOAD_STOP, CLOSE_TAB_ON_DOWNLOAD_COMPLETE } from '@/global/globalconfig.js';
 import { processListLinks } from './getList.js';
 import { downloadTabResources } from '@/global/downloadTabResources.js';
 import { downloadMatchTabsBatch } from '@/global/downloadMatchTabsBatch.js';
@@ -16,8 +16,10 @@ async function listener(command, tab) {
   });
   console.log(`Command "${command}" triggered`);
   await chrome.storage.local.set({ [DOWNLOAD_STOP]: '1' });
+  const closeTabOnDownloadComplete = await chrome.storage.local.get([CLOSE_TAB_ON_DOWNLOAD_COMPLETE]).then(res => res[CLOSE_TAB_ON_DOWNLOAD_COMPLETE]);
+  const close = closeTabOnDownloadComplete === '1';
   if (command === 'RUN_ALT_L') {
-    await processListLinks(tab, { all: true, save: true });
+    await processListLinks(tab, { all: close, save: true });
   }
   if (command === 'RUN_ALT_S') {
     console.log('Current Tab:', tab);
@@ -26,7 +28,7 @@ async function listener(command, tab) {
   }
 
   if (command === 'RUN_ALT_A') {
-    await downloadMatchTabsBatch()
+    await downloadMatchTabsBatch({ all: close, save: true });
   }
 
   if (command === 'RUN_ALT_T') {

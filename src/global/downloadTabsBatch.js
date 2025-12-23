@@ -41,7 +41,7 @@ export async function downloadTabsBatch(tabs = [], options = {}) {
         if (all) {
           await tryCloseTab(tab);
         }
-        log('done tab', tab.id ?? tab.url, res && res.success ? 'ok' : 'failed');
+        log('done tab', tab.title ?? tab.url, res && res.success ? 'ok' : 'failed');
       } catch (error) {
         results.push({ ...tab, error });
         log('error tab', tab.id ?? tab.url, error);

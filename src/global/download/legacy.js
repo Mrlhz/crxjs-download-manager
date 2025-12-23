@@ -34,6 +34,6 @@ export async function downloadWithSave(downloadOptions = {}) {
   try {
     return await downloadService.downloadAndSave(downloadOptions);
   } catch (error) {
-    return error; // 注意：这里返回 Error 实例而非 throw，符合原始行为
+    throw error; // 注意：这里throw Error, ruturn Error会导致调用方无法catch到错误
   }
 }

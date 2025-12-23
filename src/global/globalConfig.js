@@ -28,13 +28,19 @@ export const DOWNLOAD_STOP = 'DOWNLOAD_STOP';
 // 倒序下载
 export const DOWNLOAD_REVERSE = 'DOWNLOAD_REVERSE';
 export const TOBE_DOWNLOADED_LIST = 'TOBE_DOWNLOADED_LIST';
+export const CLOSE_TAB_ON_DOWNLOAD_COMPLETE = 'CLOSE_TAB_ON_DOWNLOAD_COMPLETE';
 
 export const WAIT_TIME_BEFORE_NEXT_LINK = 'WAIT_TIME_BEFORE_NEXT_LINK';
 export const delay = 5000;
 
+// 最大循环次数
+export const MAX_ITERATIONS_KEY = 'maxIterations';
+export const MAX_ITERATIONS_VALUE = 16;
+
 export const LIST_SELECTORS = '#user_detail_element ul[data-e2e=\"scroll-list\"]';
 
-export const PAGE_HOST = '';
+export const PAGE_HOST = 'douyin.com';
+export const PLATFORM = 'douyin';
 
 // 按延迟等级命名（通用、简洁）
 export const DELAY_LEVEL_1_MS = 1000;
