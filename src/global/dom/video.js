@@ -1,3 +1,6 @@
+import { PAGE_HOST } from '@/global/globalConfig.js';
+import { waitForTitle } from '@/global/dom/title.js';
+
 /**
  * Injects a content script into the given tab to extract video metadata and download targets.
  *
@@ -5,7 +8,9 @@
  * @param {Object} [options] - Options forwarded to the page script.
  * @returns {Promise<*>} Result of chrome.scripting.executeScript invocation.
  */
-export function getVideo(tab, options) {
+export async function getVideo(tab, options) {
+  const r = await chrome.scripting.executeScript({ target: { tabId: tab.id }, function: waitForTitle, args: [{ domain: PAGE_HOST }] });
+  console.log('[getVideo]', r)
   return chrome.scripting.executeScript({ target: { tabId: tab.id }, function: extractVideoData, args: [tab, options] });
 }
 
@@ -59,7 +64,7 @@ function extractVideoData(tab, options = {}) {
     title = (title ? title.replace(' - 抖音', '') : options?.noteId) || '-';
     // 用户名
     const name = options.name || document.querySelector('#douyin-right-container a[href*="//www.douyin.com/user/"] > div > span > span > span > span > span > span')?.innerText;
-    const noteId = options.noteId || (new URL(tab?.url)).pathname.split('/').at(-1) || 'unknown_note_id';
+    const noteId = options?.noteId || (new URL(tab?.url)).pathname.split('/').at(-1) || 'unknown_note_id';
 
     const filenamePrefix = `${name}`;
     const sources = [...document.querySelectorAll('video source')]
@@ -78,15 +83,12 @@ function extractVideoData(tab, options = {}) {
           tabId: tab.id,
           noteId,
           title,
-          ...(options.all ? { all: true } : {}),
-          __source: []
+          sourcePlatform: options?.platform || '',
+          sourceUrl: url,
+          sourcePageUrl: tab.url,
+          ...(options.all ? { all: true } : {})
         };
       });
-
-    // 设置source，重试下载时用到
-    sources.forEach(item => {
-      item.__source = [...sources].map(V => V);
-    });
 
     console.log({ sources });
 

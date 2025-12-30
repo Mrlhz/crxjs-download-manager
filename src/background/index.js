@@ -23,7 +23,7 @@ async function listener(command, tab) {
   }
   if (command === 'RUN_ALT_S') {
     console.log('Current Tab:', tab);
-    const result = await downloadTabResources(tab, { all: false, save: true });
+    const result = await downloadTabResources(tab, { all: close, save: true });
     console.log('Download Tab Resources Result:', result);
   }
 

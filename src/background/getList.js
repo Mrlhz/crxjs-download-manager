@@ -6,7 +6,8 @@ import {
   TOBE_DOWNLOADED_LIST,
   LIST_SELECTORS,
   WAIT_TIME_BEFORE_NEXT_LINK,
-  DELAY_LEVEL_5_MS
+  DELAY_LEVEL_5_MS,
+  MAX_ITERATIONS_VALUE
 } from '@/global/globalConfig.js';
 import { downloadTabsBatch } from '@/global/downloadTabsBatch.js';
 
@@ -15,18 +16,26 @@ export function getList(tab, options) {
 }
 
 function getLinks(tab, options = {}) {
+  const formatLink = (list) => {
+    return Array.from(list)
+      .map(item => {
+        return (item.href?.startsWith('http') ? item.href : location.origin + item.href);
+      })
+      .filter(href => href !== null);
+  };
   try {
     // 获取作品列表链接
     const userDetailElement = document.querySelector("#user_detail_element ul[data-e2e=\"scroll-list\"]");
     const size = document.querySelector("#semiTabpost span[data-e2e=\"user-tab-count\"]")?.innerText || 0;
     if (userDetailElement) {
       const listItems = userDetailElement.querySelectorAll("li a");
-      const links = Array.from(listItems)
-        .map(item => {
-          return (item.href?.startsWith('http') ? item.href : location.origin + item.href);
-        })
-        .filter(href => href !== null);
-        console.log(links);
+      const links = formatLink(listItems);
+      console.log('scroll-list', links);
+      return { size, result: links };
+    } else if (document.querySelector("#user_detail_element div[data-e2e=\"user-post-list\"]")) {
+      const list = document.querySelectorAll("#user_detail_element div[data-e2e=\"user-post-list\"] .video-card-in-user-timeline-list a");
+      const links = formatLink(list);
+      console.log('user-post-list', links);
       return { size, result: links };
     }
 
@@ -38,7 +47,7 @@ function getLinks(tab, options = {}) {
 }
 
 // 循环获取所有作品列表链接，直到没有新链接为止，或达到最大循环次数
-export async function getLimitedListLinks(tab, options = {}, maxIterations = 10) {
+export async function getLimitedListLinks(tab, options = {}, maxIterations = MAX_ITERATIONS_VALUE) {
   let allLinks = [];
   let newLinksFound = true;
   let iteration = 0;
@@ -73,7 +82,7 @@ export async function getLimitedListLinks(tab, options = {}, maxIterations = 10)
   return allLinks;
 }
 
-// 两个数相减绝对值小于2则认为相等
+// 两个数相减绝对值小于给定值则认为相等
 function isApproximatelyEqual(a, b, threshold = 6) {
   return Math.abs(a - b) < threshold;
 }

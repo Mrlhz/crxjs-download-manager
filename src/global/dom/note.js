@@ -1,3 +1,5 @@
+import { PAGE_HOST } from '@/global/globalConfig.js';
+import { waitForTitle } from '@/global/dom/title.js';
 
 /**
  * @fileoverview 抖音笔记页面数据提取器（在页面上下文执行的函数被注入到目标 tab）。
@@ -18,8 +20,9 @@
  *
  * 可能返回错误：{ error: 'CAPTCHA_REQUIRED' } 当页面未包含预期的容器节点（可能被验证码挡住）。
  */
-export function getNote(tab, options) {
-  // 等待
+export async function getNote(tab, options) {
+  const r = await chrome.scripting.executeScript({ target: { tabId: tab.id }, function: waitForTitle, args: [{ domain: PAGE_HOST }] });
+  console.log('[getNote]', r)
 
   return chrome.scripting.executeScript({
     target: { tabId: tab.id },
@@ -45,13 +48,13 @@ function pageExtractNote(tab, options = {}) {
   if (type === '/user') {
     const userInfo = parseUserInfo();
     return {
-        ...extractDetails({ tab, options: { ...options, ...userInfo } }),
+        ...extractDetails(tab, { ...options, ...userInfo }),
         ...userInfo,
         noteId
     };
   }
 
-  return extractDetails({ tab, options });
+  return extractDetails(tab, options);
 
   // 解析页面中可能存在的用户名与标题（针对 /user 类型页面）
   function parseUserInfo() {
@@ -69,7 +72,7 @@ function pageExtractNote(tab, options = {}) {
   }
 
   // 提取笔记的核心信息（标题、用户名、图片列表等）
-  function extractDetails({ tab, options = {} } = {}) {
+  function extractDetails(tab, options = {}) {
     let title = options.title || tab?.title;
     if (title.startsWith('douyin.com') && document?.title) {
       title = document.title;
@@ -85,7 +88,7 @@ function pageExtractNote(tab, options = {}) {
     })();
 
     const sources = collectImageSources();
-    const images = buildImageObjects({ sources, title, name, noteId: resolvedNoteId, tabId: tab?.id, all: !!options.all });
+    const images = buildImageObjects({ sources, title, name, noteId: resolvedNoteId, tabId: tab?.id }, options);
 
     return {
       name,
@@ -106,7 +109,8 @@ function pageExtractNote(tab, options = {}) {
   }
 
   // 根据源数组构建可下载的图片对象数组
-  function buildImageObjects({ sources, title, name, noteId, tabId, all = false }) {
+  function buildImageObjects({ sources, title, name, noteId, tabId, all = false }, options = {}) {
+    const { all } = options;
     const filenamePrefix = `${name}`;
     return sources
       .filter(src => src && !src.endsWith('.mp3'))
@@ -125,6 +129,9 @@ function pageExtractNote(tab, options = {}) {
           tabId,
           noteId,
           title,
+          sourcePlatform: options?.platform || '',
+          sourceUrl: url,
+          sourcePageUrl: tab.url,
           ...(all ? { all: true } : {})
         };
       });

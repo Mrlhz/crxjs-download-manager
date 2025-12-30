@@ -3,8 +3,8 @@ import { pathExists } from '@/global/pathExists.js';
 import { getNote } from '@/global/dom/note.js';
 import { getVideo } from '@/global/dom/video.js';
 import { saveOne } from '@/global/global.js';
-import { NOTE_ID_KEY, DOWNLOAD_STOP } from '@/global/globalConfig.js';
-import { download } from '@/global/download.js';
+import { NOTE_ID_KEY, DOWNLOAD_STOP, PLATFORM } from '@/global/globalConfig.js';
+import { downloadWithSave } from '@/global/download/index.js';
 import { tryCloseTab } from '@/global/tryCloseTab.js';
 import chalk from '@/utils/chalk/chalk-ansi.js';
 
@@ -39,7 +39,7 @@ export async function downloadTabResources(tab = {}, options = {}) {
   const log = (...args) => console.log(chalk.blue('[downloadTabResources]: '), ...args);
   log('Starting download for tab:', tab.id, 'with options:', options);
   try {
-    const resourceInfo = await getTabResourceInfo(tab, {});
+    const resourceInfo = await getTabResourceInfo(tab, { platform: PLATFORM });
     if (resourceInfo.error) {
       log('Error getting resource info for tab:', tab.id, resourceInfo.error);
       return { success: false, message: 'Failed to get resource info' };
@@ -50,6 +50,7 @@ export async function downloadTabResources(tab = {}, options = {}) {
     const filesToDownload = await pathExists(files);
     if (filesToDownload.length === 0) {
       log('All files already exist for tab:', tab.id);
+      // TODO await saveFile();
       await saveResource(tab, options, resourceInfo);
       if (all) {
         await tryCloseTab(tab);
@@ -59,7 +60,7 @@ export async function downloadTabResources(tab = {}, options = {}) {
     const results = [];
     const errors = [];
     for (const file of filesToDownload) {
-      const response = await downloadWithRetry(file);
+      const response = await downloadWithRetry(file, resourceInfo);
       if (response.error) {
         log(response);
         errors.push(response);
@@ -120,11 +121,11 @@ async function getTabResourceInfo(tab, options = {}) {
  * @param {Object} file - Resource file descriptor (must include `type`).
  * @returns {Promise<Object>} download result or { error } object.
  */
-async function downloadWithRetry(file = {}) {
+async function downloadWithRetry(file = {} , sources = {}) {
   if (file.type === 'note') {
     return downloadNoteWithRetry(file);
   } else if (file.type === 'video') {
-    return downloadVideoWithRetry(file);
+    return downloadVideoWithRetry(file, sources);
   }
 }
 
@@ -136,7 +137,7 @@ async function downloadWithRetry(file = {}) {
  */
 async function downloadNoteWithRetry(file = {}) {
   try {
-    const response = await download(file);
+    const response = await downloadWithSave(file);
     return response;
   } catch (error) {
     if (error.message === 'Invalid filename') {
@@ -144,7 +145,7 @@ async function downloadNoteWithRetry(file = {}) {
       const obj = { ...file, filename: `${safeFileName(name)}/${safeFileNameWithExtension(fileName)}` };
       const [filterFile] = await pathExists([obj]);
       if (filterFile) {
-        const response = await download(obj);
+        const response = await downloadWithSave(obj);
         return response;
       }
       return { error: `files already exist: ${obj.filename}` }
@@ -160,16 +161,16 @@ async function downloadNoteWithRetry(file = {}) {
  * @param {Object} file
  * @returns {Promise<Object>}
  */
-async function downloadVideoWithRetry(file = {}) {
+async function downloadVideoWithRetry(file = {}, sources = {}) {
   try {
-    const response = await download(file);
+    const response = await downloadWithSave(file);
     return response;
   } catch (error) {
     if (error?.message === 'Download interrupted') {
-      const { __source: videos } = file;
+      const { videos } = sources;
       console.log(`${chalk.blue('[downloadVideoWithRetry]')}, ${chalk.red(error?.message)}`, videos)
       if (Array.isArray(videos) && videos.length > 1 && videos[0]) {
-        const response = await download(videos[0]);
+        const response = await downloadWithSave(videos[0]);
         return response;
       }
     }
@@ -178,7 +179,7 @@ async function downloadVideoWithRetry(file = {}) {
       const obj = { ...file, filename: `${safeFileName(name)}/${safeFileNameWithExtension(fileName)}` };
       const [filterFile] = await pathExists([obj]);
       if (filterFile) {
-        const response = await download(obj);
+        const response = await downloadWithSave(obj);
         return response;
       }
       return { error: `${error.message}: ${file.filename}` }
