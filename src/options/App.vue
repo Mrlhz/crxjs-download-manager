@@ -7,11 +7,18 @@
       <el-form-item label="倒序下载">
         <el-switch v-model="form[DOWNLOAD_REVERSE]" />
       </el-form-item>
+      <el-form-item label="下载完成是否关闭页面">
+        <el-switch v-model="form[CLOSE_TAB_ON_DOWNLOAD_COMPLETE]" />
+      </el-form-item>
       <el-form-item label="处理下一个链接的等待时间">
         <el-input-number v-model="form[WAIT_TIME_BEFORE_NEXT_LINK]" :min="1" :max="60000">
           <template #suffix>
             <span>ms</span>
           </template>
+        </el-input-number>
+      </el-form-item>
+      <el-form-item label="最大循环次数">
+        <el-input-number v-model="form[MAX_ITERATIONS_KEY]" :min="1" :max="100">
         </el-input-number>
       </el-form-item>
       <el-form-item label=""></el-form-item>
@@ -27,18 +34,28 @@
 
 <script setup>
 import { reactive, onMounted } from 'vue';
-import { DOWNLOAD_STOP, DOWNLOAD_REVERSE, WAIT_TIME_BEFORE_NEXT_LINK, DELAY_LEVEL_5_MS } from '@/global/globalConfig.js';
+import {
+  DOWNLOAD_STOP,
+  DOWNLOAD_REVERSE,
+  WAIT_TIME_BEFORE_NEXT_LINK,
+  DELAY_LEVEL_5_MS,
+  CLOSE_TAB_ON_DOWNLOAD_COMPLETE,
+  MAX_ITERATIONS_KEY,
+  MAX_ITERATIONS_VALUE
+} from '@/global/globalConfig.js';
 
 const form = reactive({
   [DOWNLOAD_STOP]: true,
   [DOWNLOAD_REVERSE]: false,
-  [WAIT_TIME_BEFORE_NEXT_LINK]: DELAY_LEVEL_5_MS
+  [WAIT_TIME_BEFORE_NEXT_LINK]: DELAY_LEVEL_5_MS,
+  [MAX_ITERATIONS_KEY]: MAX_ITERATIONS_VALUE,
+  [CLOSE_TAB_ON_DOWNLOAD_COMPLETE]: true
 });
 
 onMounted(async () => {
   const config = await chrome.storage.local.get(null).then(res => res);
   Object.keys(config).forEach(key => {
-    if ([DOWNLOAD_STOP, DOWNLOAD_REVERSE].includes(key)) {
+    if ([DOWNLOAD_STOP, DOWNLOAD_REVERSE, CLOSE_TAB_ON_DOWNLOAD_COMPLETE].includes(key)) {
       form[key] = config[key] === '1';
     }
     if ([WAIT_TIME_BEFORE_NEXT_LINK].includes(key)) {
@@ -51,7 +68,9 @@ const onSubmit = async () => {
   const config = {
     [DOWNLOAD_STOP]: form[DOWNLOAD_STOP] ? '1' : '0',
     [DOWNLOAD_REVERSE]: form[DOWNLOAD_REVERSE] ? '1' : '0',
+    [CLOSE_TAB_ON_DOWNLOAD_COMPLETE]: form[CLOSE_TAB_ON_DOWNLOAD_COMPLETE] ? '1' : '0',
     [WAIT_TIME_BEFORE_NEXT_LINK]: form[WAIT_TIME_BEFORE_NEXT_LINK],
+    [MAX_ITERATIONS_KEY]: form[MAX_ITERATIONS_KEY],
   }
 
   await chrome.storage.local.set({ ...config });
