@@ -172,6 +172,94 @@ export async function processListLinks(tab, options = {}) {
   }
 }
 
+// 批量打开标签页预取内容
+function prefetchLinksInTabs(links = [], options = {}) {
+  const completeTabs = links.map(link => new Promise((resolve) => {
+    chrome.tabs.create({ url: link, active: options?.active || false }, (completeTab) => {
+      // 等待标签页加载完成
+      chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
+        if (changeInfo.status === 'complete' && tabId === completeTab?.id) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve(updatedTab);
+        }
+      });
+    });
+  }));
+
+  return Promise.all(completeTabs);
+}
+
+// 先预先3个链接，循环所有作品列表链接，执行下载任务，再次优化预取逻辑
+export async function processListLinksWithPrefetch(tab, options = {}) {
+  try {
+    const {
+      DOWNLOAD_REVERSE: reverse,
+      PREFETCH_LINKS_KEY: prefetchCount,
+      MAX_ITERATIONS_VALUE: maxIterations,
+    } = await chrome.storage.local.get(null);
+    const links = await getLimitedListLinks(tab, options, maxIterations ? parseInt(maxIterations) : MAX_ITERATIONS_VALUE);
+    console.log('Complete list of links:', links);
+
+    // 正序或倒序处理链接
+    const task = reverse === '1' ? [...links].reverse() : [...links];
+    // 过滤已下载的noteIds对应的链接
+    const noteIds = links.map(link => getNoteId(link)).filter(id => id !== null);
+    // 待下载保存的noteIds
+    const missingIds = await getMissingIds(noteIds);
+    if (Array.isArray(missingIds)) {
+      const list = await getToBeDownloadedList(TOBE_DOWNLOADED_LIST);
+      missingIds.push(...list);
+    }
+    console.log('Existing noteIds:', missingIds);
+
+    // nodeId作为key, value为link的Map
+    const noteIdToLinkMap = new Map(task.map(link => [getNoteId(link), link]));
+    // 筛选出需要下载的链接
+    const prefetchTasks = missingIds.map(id => noteIdToLinkMap.get(id)).filter(link => link !== undefined);
+    console.log('Filtered task list:', prefetchTasks);
+
+    if (Array.isArray(missingIds) && missingIds.length === 0 || prefetchTasks.length === 0) {
+      console.log('All noteIds already exist, stopping further processing.');
+      return;
+    }
+
+    const prefetchLinks = [];
+    const prefetchTabs = [];
+    while (prefetchTasks.length > 0 || prefetchTabs.length > 0) {
+      try {
+        const stop = await chrome.storage.local.get([DOWNLOAD_STOP]).then(res => res[DOWNLOAD_STOP]);
+        if (stop === '0') {
+          console.log('Download process stopped by user.');
+          break;
+        }
+        // 如果prefetchLinks不够，则继续从prefetchTasks中取
+        if (prefetchTasks.length > 0 && prefetchTabs.length < (prefetchCount || PREFETCH_LINKS_COUNT)) {
+          console.log('Not enough prefetch links, continuing to fetch from main task.');
+          const _prefetchLinks = prefetchTasks.splice(0, (prefetchCount ? parseInt(prefetchCount) : PREFETCH_LINKS_COUNT) - prefetchTabs.length);
+          prefetchLinks.push(..._prefetchLinks);
+          // 批量预取链接
+          const _prefetchTabs = await prefetchLinksInTabs(_prefetchLinks, { active: _prefetchLinks.length === 1 });
+          prefetchTabs.push(..._prefetchTabs);
+        }
+
+        const results = [];
+        const preDownloadTabs = prefetchTasks.length > 0 ? prefetchTabs.splice(0, 1) : prefetchTabs.splice(0, prefetchTabs.length);
+        for (const tab of preDownloadTabs) {
+          const res = await downloadTabsBatch([tab], options);
+          results.push(res);
+        }
+        console.log('downloadTabsBatch result for prefetched tabs:--------------------', results);
+        console.log('Finished prefetching links, remaining prefetch tasks:', prefetchTasks.length, 'remaining prefetch tabs:', prefetchTabs.length);
+      } catch (error) {
+        console.log('Error prefetching links:', error);
+        continue;
+      }
+    }
+  } catch (error) {
+    console.log('Error in [processListLinksWithPrefetch]:', error);
+  }
+}
+
 async function getToBeDownloadedList(key = TOBE_DOWNLOADED_LIST) {
   // await chrome.storage.local.set({ TOBE_DOWNLOADED_LIST: [] });
   const result = await chrome.storage.local.get([key]).then(res => res[key]);
