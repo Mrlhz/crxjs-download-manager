@@ -1,19 +1,26 @@
+import { saveFile } from '@/global/global.js';
+import { PLATFORM } from '@/global/globalConfig.js';
+const activeDelta = new Map();
+
 // chrome.downloads.download + chrome.downloads.onChanged.addListener 封装download方法
 export function download(downloadOptions = {}) {
   const { url, filename } = downloadOptions;
   return new Promise((resolve, reject) => {
     chrome.downloads.download({ url, filename }, (downloadId) => {
       if (chrome.runtime.lastError || !downloadId) {
+        console.log(chrome.runtime.lastError);
         return reject(chrome.runtime.lastError || new Error('Download failed'));
       }
 
       chrome.downloads.onChanged.addListener(onChangedListener);
 
       function onChangedListener (delta) {
+        setData(activeDelta, delta, downloadOptions);
+        console.log('delta', delta, activeDelta);
         if (delta.id === downloadId) {
           if (delta?.state?.current === 'complete') {
             chrome.downloads.onChanged.removeListener(onChangedListener);
-            resolve({ downloadId, ...downloadOptions });
+            resolve({ downloadId, delta: activeDelta.get(downloadId),...downloadOptions });
           } else if (delta?.state?.current === 'interrupted') {
             chrome.downloads.onChanged.removeListener(onChangedListener);
             reject(new Error('Download interrupted'));
@@ -29,6 +36,45 @@ export function download(downloadOptions = {}) {
     });
   });
 }
+
+export async function downloadWithSave(downloadOptions = {}) {
+  try {
+    const result = await download(downloadOptions);
+    const { delta } = result;
+    await saveFile(delta).catch((error) => {
+      console.log('[downloadWithSave]', error);
+    });
+    return result;
+  } catch (error) {
+    return error;
+  }
+}
+
+function setData(map = new Map(), delta, downloadOptions) {
+  const { id } = delta;
+  if (!map.has(id)) {
+    map.set(id, {
+      filename: downloadOptions.filename || delta?.filename?.current,
+      size: delta?.fileSize?.current,
+      sourcePlatform: downloadOptions.sourcePlatform || PLATFORM,
+      sourceUrl: downloadOptions.sourceUrl,
+      sourcePageUrl: downloadOptions.sourcePageUrl || '',
+      platformMetadata: {
+        authorName: downloadOptions.name,
+        contentId: downloadOptions.noteId,
+        title: downloadOptions.title,
+      }
+    });
+  } else {
+    const old = map.get(id);
+    map.set(id, {
+      ...old,
+      filename: old?.filename || delta?.filename?.current,
+      size: old?.size || delta?.fileSize?.current
+    })
+  }
+}
+
 
 // chrome.downloads.download + chrome.downloads.onChanged.addListener 封装download方法
 // 并能根据入参控制并发
