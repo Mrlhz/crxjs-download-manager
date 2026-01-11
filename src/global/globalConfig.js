@@ -48,3 +48,7 @@ export const DELAY_LEVEL_2_MS = 2000;
 export const DELAY_LEVEL_3_MS = 3000;
 export const DELAY_LEVEL_4_MS = 4000;
 export const DELAY_LEVEL_5_MS = 5000;
+
+// 预取链接个数
+export const PREFETCH_LINKS_COUNT = 3;
+export const PREFETCH_LINKS_KEY = 'prefetchLinksCount';

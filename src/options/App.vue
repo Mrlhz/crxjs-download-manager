@@ -21,7 +21,10 @@
         <el-input-number v-model="form[MAX_ITERATIONS_KEY]" :min="1" :max="100">
         </el-input-number>
       </el-form-item>
-      <el-form-item label=""></el-form-item>
+      <el-form-item label="预取链接个数">
+        <el-input-number v-model="form[PREFETCH_LINKS_KEY]" :min="1" :max="20">
+        </el-input-number>
+      </el-form-item>
       <el-form-item label=""></el-form-item>
       <el-form-item label=""></el-form-item>
       <el-form-item>
@@ -41,7 +44,9 @@ import {
   DELAY_LEVEL_5_MS,
   CLOSE_TAB_ON_DOWNLOAD_COMPLETE,
   MAX_ITERATIONS_KEY,
-  MAX_ITERATIONS_VALUE
+  MAX_ITERATIONS_VALUE,
+  PREFETCH_LINKS_KEY,
+  PREFETCH_LINKS_COUNT
 } from '@/global/globalConfig.js';
 
 const form = reactive({
@@ -49,7 +54,8 @@ const form = reactive({
   [DOWNLOAD_REVERSE]: false,
   [WAIT_TIME_BEFORE_NEXT_LINK]: DELAY_LEVEL_5_MS,
   [MAX_ITERATIONS_KEY]: MAX_ITERATIONS_VALUE,
-  [CLOSE_TAB_ON_DOWNLOAD_COMPLETE]: true
+  [CLOSE_TAB_ON_DOWNLOAD_COMPLETE]: true,
+  [PREFETCH_LINKS_KEY]: PREFETCH_LINKS_COUNT,
 });
 
 onMounted(async () => {
@@ -58,7 +64,7 @@ onMounted(async () => {
     if ([DOWNLOAD_STOP, DOWNLOAD_REVERSE, CLOSE_TAB_ON_DOWNLOAD_COMPLETE].includes(key)) {
       form[key] = config[key] === '1';
     }
-    if ([WAIT_TIME_BEFORE_NEXT_LINK].includes(key)) {
+    if ([WAIT_TIME_BEFORE_NEXT_LINK, MAX_ITERATIONS_KEY].includes(key)) {
       form[key] = config[key];
     }
   });
@@ -71,6 +77,7 @@ const onSubmit = async () => {
     [CLOSE_TAB_ON_DOWNLOAD_COMPLETE]: form[CLOSE_TAB_ON_DOWNLOAD_COMPLETE] ? '1' : '0',
     [WAIT_TIME_BEFORE_NEXT_LINK]: form[WAIT_TIME_BEFORE_NEXT_LINK],
     [MAX_ITERATIONS_KEY]: form[MAX_ITERATIONS_KEY],
+    [PREFETCH_LINKS_KEY]: form[PREFETCH_LINKS_KEY],
   }
 
   await chrome.storage.local.set({ ...config });

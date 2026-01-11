@@ -91,11 +91,12 @@ function isApproximatelyEqual(a, b, threshold = 6) {
 
 // 循环所有作品列表链接，执行下载任务
 export async function processListLinks(tab, options = {}) {
-  const links = await getLimitedListLinks(tab, options);
   const {
     DOWNLOAD_REVERSE: reverse,
     PREFETCH_LINKS_KEY: prefetchCount,
+    MAX_ITERATIONS_VALUE: maxIterations,
   } = await chrome.storage.local.get(null);
+  const links = await getLimitedListLinks(tab, options, maxIterations ? parseInt(maxIterations) : MAX_ITERATIONS_VALUE);
   console.log('Complete list of links:', links);
 
   // 一次处理一个链接，避免打开过多标签页
@@ -151,17 +152,6 @@ export async function processListLinks(tab, options = {}) {
         prefetchTabs.push(tab);
         await focusPageContentTabsSequentially([tab], 1500);
       }
-      // const newTabs = await Promise.all(prefetchTasks.map(link => new Promise((resolve) => {
-      //   chrome.tabs.create({ url: link, active: false }, (tab) => {
-      //     // 等待标签页加载完成
-      //     chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
-      //       if (changeInfo.status === 'complete' && tabId === tab?.id) {
-      //         chrome.tabs.onUpdated.removeListener(listener);
-      //         resolve(updatedTab);
-      //       }
-      //     });
-      //   });
-      // })));
       console.log('Prefetched tabs loaded:', prefetchTabs);
       // if (task.length) {
       //   // 等待一段时间

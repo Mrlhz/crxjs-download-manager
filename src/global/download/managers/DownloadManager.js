@@ -54,7 +54,7 @@ export class DownloadManager {
         (downloadId) => {
           if (chrome.runtime.lastError || downloadId === undefined) {
             const error = chrome.runtime.lastError || new Error('下载失败');
-            console.error('下载初始化失败:', error);
+            console.log('下载初始化失败:', error);
             return reject(new DownloadError(
               error.message,
               DownloadErrorType.DOWNLOAD_FAILED,
