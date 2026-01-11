@@ -1,4 +1,4 @@
-import { getMissingIds } from '@/global/global.js';
+import { getMissingIds, focusPageContentTabsSequentially } from '@/global/global.js';
 import { getNoteId } from '@/utils/index.js';
 import {
   DOWNLOAD_STOP,
@@ -7,7 +7,9 @@ import {
   LIST_SELECTORS,
   WAIT_TIME_BEFORE_NEXT_LINK,
   DELAY_LEVEL_5_MS,
-  MAX_ITERATIONS_VALUE
+  MAX_ITERATIONS_VALUE,
+  PREFETCH_LINKS_KEY,
+  PREFETCH_LINKS_COUNT
 } from '@/global/globalConfig.js';
 import { downloadTabsBatch } from '@/global/downloadTabsBatch.js';
 
@@ -90,7 +92,10 @@ function isApproximatelyEqual(a, b, threshold = 6) {
 // 循环所有作品列表链接，执行下载任务
 export async function processListLinks(tab, options = {}) {
   const links = await getLimitedListLinks(tab, options);
-  const reverse = await chrome.storage.local.get([DOWNLOAD_REVERSE]).then(res => res[DOWNLOAD_REVERSE]);
+  const {
+    DOWNLOAD_REVERSE: reverse,
+    PREFETCH_LINKS_KEY: prefetchCount,
+  } = await chrome.storage.local.get(null);
   console.log('Complete list of links:', links);
 
   // 一次处理一个链接，避免打开过多标签页
@@ -105,50 +110,73 @@ export async function processListLinks(tab, options = {}) {
   }
   console.log('Existing noteIds:', missingIds);
   console.log('Filtered task list:', task);
+  if (Array.isArray(missingIds) && missingIds.length === 0) {
+    console.log('All noteIds already exist, stopping further processing.');
+    return;
+  }
   while (task.length > 0) {
     const stop = await chrome.storage.local.get([DOWNLOAD_STOP]).then(res => res[DOWNLOAD_STOP]);
     if (stop === '0') {
       console.log('Download process stopped by user.');
       break;
     }
-    const link = task.shift();
+    // 预取接下来的3个链接
+    const prefetchLinks = task.splice(0, prefetchCount ? parseInt(prefetchCount) : PREFETCH_LINKS_COUNT);
     // 过滤掉已存在的noteIds对应的链接
-    if (Array.isArray(missingIds) && missingIds.length === 0) {
-      console.log('All noteIds already exist, stopping further processing.');
-      break;
-    }
-    const noteId = getNoteId(link);
-    if (noteId && !missingIds.includes(noteId)) {
-      console.log('Skipping already existing noteId link:', link);
+    const prefetchTasks = prefetchLinks.filter(link => {
+      const noteId = getNoteId(link);
+      return noteId && missingIds.includes(noteId);
+    });
+    console.log('Prefetching links:', prefetchTasks);
+    if (prefetchTasks.length === 0) {
+      console.log('No prefetch tasks needed for existing noteIds.');
       continue;
     }
     try {
-      console.log('Processing link:', link);
-      // 在这里添加对每个链接的处理逻辑，例如打开新标签页并下载内容
-      const newTab = await new Promise((resolve) => {
-        chrome.tabs.create({ url: link, active: true }, (tab) => {
-          // 等待标签页加载完成
-          chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
-            if (changeInfo.status === 'complete' && tabId === tab?.id) {
-              chrome.tabs.onUpdated.removeListener(listener);
-              resolve(updatedTab);
-            }
+      console.log('Prefetching links by opening tabs:', prefetchTasks);
+      // 逐个打开标签页预取内容
+      const prefetchTabs = [];
+      for (const link of prefetchTasks) {
+        const tab = await new Promise((resolve) => {
+          chrome.tabs.create({ url: link, active: false }, (tab) => {
+            // 等待标签页加载完成
+            chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
+              if (changeInfo.status === 'complete' && tabId === tab?.id) {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve(updatedTab);
+              }
+            });
           });
         });
-      });
-      if (task.length) {
-        // 等待一段时间
-        const delay = await chrome.storage.local.get([WAIT_TIME_BEFORE_NEXT_LINK]).then(res => res[WAIT_TIME_BEFORE_NEXT_LINK]);
-        console.log(`Waiting ${(delay || DELAY_LEVEL_5_MS)/1000} seconds before processing next link`);
-        await new Promise(resolve => setTimeout(resolve, delay || DELAY_LEVEL_5_MS));
+        prefetchTabs.push(tab);
+        await focusPageContentTabsSequentially([tab], 1500);
       }
-
-      console.log('New tab loaded:', newTab);
-      const res = await downloadTabsBatch([newTab], options);
+      // const newTabs = await Promise.all(prefetchTasks.map(link => new Promise((resolve) => {
+      //   chrome.tabs.create({ url: link, active: false }, (tab) => {
+      //     // 等待标签页加载完成
+      //     chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
+      //       if (changeInfo.status === 'complete' && tabId === tab?.id) {
+      //         chrome.tabs.onUpdated.removeListener(listener);
+      //         resolve(updatedTab);
+      //       }
+      //     });
+      //   });
+      // })));
+      console.log('Prefetched tabs loaded:', prefetchTabs);
+      // if (task.length) {
+      //   // 等待一段时间
+      //   const delay = await chrome.storage.local.get([WAIT_TIME_BEFORE_NEXT_LINK]).then(res => res[WAIT_TIME_BEFORE_NEXT_LINK]);
+      //   console.log(`Waiting ${(delay || DELAY_LEVEL_5_MS)/1000} seconds before processing next task`);
+      //   await new Promise(resolve => setTimeout(resolve, delay || DELAY_LEVEL_5_MS));
+      // }
+      // await focusPageContentTabsSequentially(prefetchTabs, 1500);
+      // 将预取的标签页加入下载队列
+      const res = await downloadTabsBatch(prefetchTabs, options);
+      console.log('downloadTabsBatch result for prefetched tabs:--------------------', res);
       console.log('downloadTabsBatch result:--------------------', res);
-      console.log('Finished processing link:', link, task.length, 'links remaining.');
+      console.log('Finished prefetching links:', prefetchTasks, 'links remaining in main task:', task.length);
     } catch (error) {
-      console.log('Error processing link:', link, error);
+      console.log('Error prefetching links:', prefetchTasks, error);
       continue;
     }
   }
