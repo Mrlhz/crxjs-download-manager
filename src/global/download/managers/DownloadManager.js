@@ -21,7 +21,7 @@ export class DownloadManager {
     
     this._setupGlobalListener();
   }
-  
+
   /**
    * 设置全局下载监听器
    * @private
@@ -29,7 +29,7 @@ export class DownloadManager {
   _setupGlobalListener() {
     chrome.downloads.onChanged.addListener(this._handleDownloadChange.bind(this));
   }
-  
+
   /**
    * 处理下载变化事件
    * @private
@@ -41,7 +41,7 @@ export class DownloadManager {
       listener(delta);
     }
   }
-  
+
   /**
    * 开始下载文件
    * @param {DownloadOptions} options - 下载选项
@@ -67,7 +67,7 @@ export class DownloadManager {
       );
     });
   }
-  
+
   /**
    * 设置下载监听器
    * @private
@@ -78,37 +78,25 @@ export class DownloadManager {
    */
   _setupDownloadListener(downloadId, options, resolve, reject) {
     const listener = (delta) => {
-      console.log(delta);
       if (delta.id === downloadId) {
-      // if (delta.id !== downloadId) {
-      //   console.log('下载ID不匹配，跳过:', delta.id, downloadId);
-      //   return;
-      // }
+        this._updateDownloadMetadata(downloadId, delta, options);
       
-      this._updateDownloadMetadata(downloadId, delta, options);
-      
-      if (delta?.state?.current === DownloadState.COMPLETE) {
-        const metadata = this._downloadMap.get(downloadId);
-        console.log({ metadata })
-        this._cleanupListener(downloadId);
-        resolve({
-          downloadId,
-          delta: metadata,
-          options
-        });
-      } else if (delta?.state?.current === DownloadState.INTERRUPTED) {
-        this._cleanupListener(downloadId);
-        reject(new DownloadError(
-          '下载被中断',
-          DownloadErrorType.DOWNLOAD_INTERRUPTED
-        ));
-      } else if (delta?.error || delta?.error?.current) {
-        this._cleanupListener(downloadId);
-        reject(new DownloadError(
-          `下载失败: ${delta?.error?.current || delta?.error}`,
-          DownloadErrorType.DOWNLOAD_ERROR
-        ));
-      }
+        const state = delta?.state?.current;
+        if (state === DownloadState.COMPLETE) {
+          const metadata = this._downloadMap.get(downloadId);
+          this._cleanupListener(downloadId);
+          resolve({
+            downloadId,
+            delta: metadata,
+            options
+          });
+        } else if (state === DownloadState.INTERRUPTED) {
+          this._cleanupListener(downloadId);
+          reject(new DownloadError('下载被中断', DownloadErrorType.DOWNLOAD_INTERRUPTED));
+        } else if (delta?.error || delta?.error?.current) {
+          this._cleanupListener(downloadId);
+          reject(new DownloadError(`下载失败: ${delta?.error?.current || delta?.error}`, DownloadErrorType.DOWNLOAD_ERROR));
+        }
       }
     };
     
@@ -123,30 +111,32 @@ export class DownloadManager {
    * @param {DownloadOptions} options - 下载选项
    */
   _updateDownloadMetadata(downloadId, delta, options) {
-    if (!this._downloadMap.has(downloadId)) {
-      this._downloadMap.set(downloadId, {
-        filename: delta.filename ? delta.filename.current : undefined,
-        size: delta.fileSize ? delta.fileSize.current : undefined,
-        sourcePlatform: options.sourcePlatform || 'douyin',
-        sourceUrl: options.sourceUrl,
-        sourcePageUrl: options.sourcePageUrl || '',
-        platformMetadata: {
-          authorName: options.name,
-          contentId: options.noteId,
-          title: options.title,
-          ...(options.metadata || {})
-        }
-      });
-    } else {
+    const metadata = {
+      filename: delta.filename?.current,
+      size: delta.fileSize?.current,
+      sourcePlatform: options.sourcePlatform || 'douyin',
+      sourceUrl: options.sourceUrl,
+      sourcePageUrl: options.sourcePageUrl || '',
+      platformMetadata: {
+        authorName: options.name,
+        contentId: options.noteId,
+        title: options.title,
+        ...(options.metadata || {})
+      }
+    };
+
+    if (this._downloadMap.has(downloadId)) {
       const existing = this._downloadMap.get(downloadId);
       this._downloadMap.set(downloadId, {
         ...existing,
-        filename: existing.filename || (delta.filename ? delta.filename.current : undefined),
-        size: existing.size ?? (delta.fileSize ? delta.fileSize.current : undefined)
+        filename: existing.filename ?? metadata?.filename,
+        size: existing.size ?? metadata?.size
       });
+    } else {
+      this._downloadMap.set(downloadId, metadata);
     }
   }
-  
+
   /**
    * 清理监听器
    * @private

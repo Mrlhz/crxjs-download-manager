@@ -109,7 +109,7 @@ function pageExtractNote(tab, options = {}) {
   }
 
   // 根据源数组构建可下载的图片对象数组
-  function buildImageObjects({ sources, title, name, noteId, tabId, all = false }, options = {}) {
+  function buildImageObjects({ sources, title, name, noteId, tabId }, options = {}) {
     const { all } = options;
     const filenamePrefix = `${name}`;
     return sources

@@ -24,6 +24,7 @@ export async function downloadMatchTabsBatch(options = {}) {
   }
 
   for (const tab of contentTabs) {
+    await focusPageContentTabsSequentially([tab], 0);
     const result = await downloadTabResources(tab, options);
     console.log(`${tab.title}: `, result)
   }

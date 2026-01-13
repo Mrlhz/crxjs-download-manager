@@ -1,5 +1,6 @@
 import { downloadTabResources } from '@/global/downloadTabResources.js';
 import { tryCloseTab } from '@/global/tryCloseTab.js';
+import { focusPageContentTabsSequentially } from '@/global/global.js';
 
 /**
  * 批量下载多个 tab（并发控制）。
@@ -15,7 +16,7 @@ export async function downloadTabsBatch(tabs = [], options = {}) {
   const { concurrency = 2, all = false, save = false } = options;
   const log = (...args) => console.log('[downloadTabsBatch]', ...args);
 
-  if (!Array.isArray(tabs) || tabs.length === 0) {
+  if (!Array.isArray(tabs) || tabs?.length === 0) {
     return { success: false, message: 'No tabs provided', results: [] };
   }
 
@@ -36,6 +37,7 @@ export async function downloadTabsBatch(tabs = [], options = {}) {
       const tab = queue.shift();
       try {
         log('start tab', tab);
+        await focusPageContentTabsSequentially([tab], 0);
         const res = await downloadTabResources(tab, { all, save });
         results.push({ ...tab, result: res });
         if (all) {

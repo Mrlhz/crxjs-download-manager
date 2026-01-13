@@ -189,7 +189,7 @@ function prefetchLinksInTabs(links = [], options = {}) {
   return Promise.all(completeTabs);
 }
 
-// 先预先3个链接，循环所有作品列表链接，执行下载任务，再次优化预取逻辑
+// 先预先页面，循环所有作品列表链接，执行下载任务，再次优化预取逻辑
 export async function processListLinksWithPrefetch(tab, options = {}) {
   try {
     const {
